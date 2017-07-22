@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+    <head>
+      <meta charset="utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge">
+      <meta  name="viewport" content="width=device-width, initial-scale=1">
+      <title>Todo list</title>
+      <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+      <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+      <script src="/socket.io/socket.io.js"></script>
+      <style>
+        #todoForm, #todoList {
+          margin-top: 30px;
+        }
+        #todoForm button {
+          margin-top: -10px;
+        }
+      </style>
+    </head>
+
+    <body>
+      <div class="container">
+        <h1>Todo list</h1>
+        <form id="todoForm">
+          <div class="form-group">
+            <input type="text" class="form-control" id="todo" placeholder="Faire les courses">
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" id="addTodo">
+            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+          </button>
+        </form>
+        <table id="todoList" class="table table-striped">
+            <tbody>
+            </tbody>
+        </table>
+      </div>
+      <script type="text/javascript">
+        const socket = io.connect('http://localhost:8080');
+        // Fonctions de génération de l'identifiant unique
+        // @see: https://stackoverflow.com/questions/105034/create-guid-uuid-in-javascript
+        const s4 = () => {
+          return Math.floor((1 + Math.random()) * 0x10000)
+            .toString(16)
+            .substring(1);
+        }
+        const guid = () => {
+          return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
+            s4() + '-' + s4() + s4() + s4();
+        }
+        // Suppression d'un todo dans le tableau en partant de l'identifiant
+        // du bouton
+        const rmTodoFromDom = (id) => {
+          $('#' + id).closest('tr').remove()
+        }
+        // Evénement de suppression d'un todo dans le tableau
+        // 1- Envoi de l'événement rmTodo au serveur avec l'identifiant de l'élément
+        // 2- Suppression de la todo dans le tableau
+        const rmTodoEvt = (evt) => {
+          const btnId = evt.currentTarget.id
+
+          socket.emit('rmTodo', btnId)
+          rmTodoFromDom(btnId)
+          return false
+        }
+        // Fonction d'ajout d'une todo dans le tableau
+        const addTodoInDom = (id, todo) => {
+          $('#todoList tbody').append([
+            '<tr>',
+              '<td>',
+                '<button id="' + id + '" type="button" class="btn btn-default">',
+                  '<span class="glyphicon glyphicon-remove" aria-hidden="true"></span>',
+                '</button>',
+              '</td>',
+              '<td>' + todo + '</td>',
+            '</tr>'].join(''))
+          $('#' + id).click(rmTodoEvt)
+        }
+        // Ajout d'une todo si l'utilisateur clique sur enter
+        $('#addTodo').on('keypress', function(evt) {
+          if (evt.keyCode == 13) {
+            $('#todoForm').submit();
+            return false;
+          }
+        });
+        // Event d'ajout d'un todo dans la liste
+        // 1- Envoi au serveur de la nouvelle todo via l'evt addTodo (+ génération
+        //    de l'identifiant unique de la todo)
+        // 2- Ajout dans le tableau de la todo
+        $('#todoForm').submit(() => {
+          const todo = $('#todo').val().trim()
+          if (todo.length) {
+            const id = guid()
+            socket.emit('addTodo', {
+              id: id,
+              content: todo
+            })
+            $('#todo').val('').focus()
+            addTodoInDom(id, todo)
+          }
+
+          return false
+        })
+        // Initialisation du tableau avec la todolist renvoyée par le serveur
+        socket.on('initialize', (todoList) => {
+          $('#todoList tbody').empty()
+          todoList.forEach((todo) => {
+            addTodoInDom(todo.id, todo.content)
+          })
+        })
+        // Réception d'un evt de suppression d'une todo
+        socket.on('rmTodo', (id) => {
+          rmTodoFromDom(id)
+        })
+        // Réception d'un evt d'ajout d'une todo
+        socket.on('addTodo', (todo) => {
+          addTodoInDom(todo.id, todo.content)
+        })
+        // Focus sur le champ de saisie d'une todo
+        $('#todo').focus();
+      </script>
+    </body>
+</html>
